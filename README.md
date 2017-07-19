@@ -1,4 +1,5 @@
-I just needed a quick topological sort in PL/PgSQL, so here it is.
+I needed a topological sort in PL/PgSQL, so here it is.  This is probably not
+especially fast, but it's written in pure PL/PgSQL using only hstore.
 
 Example usage with the graph on the Wikipedia page:
 
