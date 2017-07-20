@@ -5,8 +5,8 @@ DECLARE
 _L int[];
 _S int[];
 _n int;
-_all_ms int[];
-_m int;
+_all_ms text[];
+_m text;
 _n_m_edges int[];
 BEGIN
 _L := '{}';
@@ -30,12 +30,12 @@ WHILE array_length(_S, 1) IS NOT NULL LOOP
 		WHERE (each.value)::int[] @> ARRAY[_n]
 	);
 	FOREACH _m IN ARRAY _all_ms LOOP
-		_n_m_edges := (_edges->(_m::text))::int[];
+		_n_m_edges := (_edges->_m)::int[];
 		IF _n_m_edges = ARRAY[_n] THEN
-			_S := array_append(_s, _m);
-			_edges := delete(_edges, _m::text);
+			_S := array_append(_s, _m::int);
+			_edges := _edges - _m;
 		ELSE
-			_edges := _edges || hstore(_m::text, array_remove(_n_m_edges, _n)::text);
+			_edges := _edges || hstore(_m, array_remove(_n_m_edges, _n)::text);
 		END IF;
 	END LOOP;
 END LOOP;
