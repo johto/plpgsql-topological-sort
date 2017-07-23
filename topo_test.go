@@ -2,9 +2,13 @@ package main
 
 import (
 	"database/sql"
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
+	"github.com/lib/pq/hstore"
 	"testing"
 )
+
+var _ = pq.Int64Array{}
+var _ = hstore.Hstore{}
 
 func testSetup(t *testing.T) *sql.DB {
 	dbh, err := sql.Open("postgres", "sslmode=disable")
@@ -60,4 +64,48 @@ func TestCycle(t *testing.T) {
 	if err.Error() != "pq: input graph contains cycles" {
 		t.Fatalf(`expected "input graph contains cycles", got %s`, err.Error())
 	}
+}
+
+func bench(b *testing.B, vertices []int64, edges hstore.Hstore) {
+	dbh, err := sql.Open("postgres", "sslmode=disable")
+	if err != nil {
+		b.Fatal(err)
+	}
+	err = dbh.Ping()
+	if err != nil {
+		b.Fatal(err)
+	}
+	hval, err := edges.Value()
+	if err != nil {
+		b.Fatal(err)
+	}
+	hvalstr := hval.([]byte)
+	exec, err := dbh.Prepare(`SELECT topological_sort($1, $2)`)
+	if err != nil {
+		b.Fatal(err)
+	}
+	arr, err := pq.Int64Array(vertices).Value()
+	if err != nil {
+		b.Fatal(err)
+	}
+	arrstr := arr.(string)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err = exec.Exec(arrstr, hvalstr)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkSmall(b *testing.B) {
+	bench(b, verticesSmall, edgesSmall)
+}
+
+func BenchmarkMedium(b *testing.B) {
+	bench(b, verticesMedium, edgesMedium)
+}
+
+func BenchmarkLarge(b *testing.B) {
+	bench(b, verticesLarge, edgesLarge)
 }
