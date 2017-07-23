@@ -7,8 +7,11 @@ import (
 	"testing"
 )
 
-var _ = pq.Int64Array{}
-var _ = hstore.Hstore{}
+type BenchType int
+const (
+	BENCH_JSON BenchType = iota
+	BENCH_HSTORE
+)
 
 func testSetup(t *testing.T) *sql.DB {
 	dbh, err := sql.Open("postgres", "sslmode=disable")
@@ -66,7 +69,7 @@ func TestCycle(t *testing.T) {
 	}
 }
 
-func bench(b *testing.B, vertices []int64, edges hstore.Hstore) {
+func bench(b *testing.B, vertices []int64, edges hstore.Hstore, benchType BenchType) {
 	dbh, err := sql.Open("postgres", "sslmode=disable")
 	if err != nil {
 		b.Fatal(err)
@@ -75,12 +78,24 @@ func bench(b *testing.B, vertices []int64, edges hstore.Hstore) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	hval, err := edges.Value()
+	eval, err := edges.Value()
 	if err != nil {
 		b.Fatal(err)
 	}
-	hvalstr := hval.([]byte)
-	exec, err := dbh.Prepare(`SELECT topological_sort($1, $2)`)
+	evalstr := eval.([]byte)
+	var exec *sql.Stmt
+	if benchType == BENCH_JSON {
+		err = dbh.QueryRow(`
+			select jsonb_object_agg(k, v::int[])
+			from each($1::hstore) e(k, v);
+		`, evalstr).Scan(&evalstr)
+		if err != nil {
+			b.Fatal(err)
+		}
+		exec, err = dbh.Prepare(`SELECT topological_sort($1, $2::jsonb)`)
+	} else if benchType == BENCH_HSTORE {
+		exec, err = dbh.Prepare(`SELECT topological_sort($1, $2::hstore)`)
+	}
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -91,21 +106,33 @@ func bench(b *testing.B, vertices []int64, edges hstore.Hstore) {
 	arrstr := arr.(string)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err = exec.Exec(arrstr, hvalstr)
+		_, err = exec.Exec(arrstr, evalstr)
 		if err != nil {
 			b.Fatal(err)
 		}
 	}
 }
 
+func BenchmarkSmallJSON(b *testing.B) {
+	bench(b, verticesSmall, edgesSmall, BENCH_JSON)
+}
+
+func BenchmarkMediumJSON(b *testing.B) {
+	bench(b, verticesMedium, edgesMedium, BENCH_JSON)
+}
+
+func BenchmarkLargeJSON(b *testing.B) {
+	bench(b, verticesLarge, edgesLarge, BENCH_JSON)
+}
+
 func BenchmarkSmall(b *testing.B) {
-	bench(b, verticesSmall, edgesSmall)
+	bench(b, verticesSmall, edgesSmall, BENCH_HSTORE)
 }
 
 func BenchmarkMedium(b *testing.B) {
-	bench(b, verticesMedium, edgesMedium)
+	bench(b, verticesMedium, edgesMedium, BENCH_HSTORE)
 }
 
 func BenchmarkLarge(b *testing.B) {
-	bench(b, verticesLarge, edgesLarge)
+	bench(b, verticesLarge, edgesLarge, BENCH_HSTORE)
 }

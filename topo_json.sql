@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION topological_sort(_nodes int[], _edges hstore)
+CREATE OR REPLACE FUNCTION topological_sort(_nodes int[], _edges jsonb)
 RETURNS int[]
 AS $$
 DECLARE
@@ -13,7 +13,7 @@ _L := '{}';
 _S := ARRAY(
 	SELECT u.node
 	FROM unnest(_nodes) u(node)
-	WHERE (_edges->(u.node::text)) IS NULL
+	WHERE (_edges->>(u.node::text)) IS NULL
 );
 IF array_length(_S, 1) IS NULL THEN
 	RAISE EXCEPTION 'no nodes with no incoming edges in input';
@@ -26,20 +26,20 @@ WHILE array_length(_S, 1) IS NOT NULL LOOP
 	_L := array_append(_L, _n);
 	_all_ms := ARRAY(
 		SELECT each.key
-		FROM each(_edges)
-		WHERE (each.value)::int[] @> ARRAY[_n]
+		FROM jsonb_each(_edges) each
+		WHERE each.value @> jsonb_build_array(_n)
 	);
 	FOREACH _m IN ARRAY _all_ms LOOP
-		_n_m_edges := (_edges->_m)::int[];
+		_n_m_edges := ARRAY(SELECT jsonb_array_elements(_edges->_m));
 		IF _n_m_edges = ARRAY[_n] THEN
 			_S := array_append(_s, _m::int);
 			_edges := _edges - _m;
 		ELSE
-			_edges := _edges || hstore(_m, array_remove(_n_m_edges, _n)::text);
+			_edges := jsonb_set(_edges, ARRAY[_m], to_jsonb(array_remove(_n_m_edges, _n)));
 		END IF;
 	END LOOP;
 END LOOP;
-IF _edges <> '' THEN
+IF _edges <> '{}' THEN
 	RAISE EXCEPTION 'input graph contains cycles';
 END IF;
 RETURN _L;
