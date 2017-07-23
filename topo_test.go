@@ -86,7 +86,7 @@ func bench(b *testing.B, vertices []int64, edges hstore.Hstore, benchType BenchT
 	var exec *sql.Stmt
 	if benchType == BENCH_JSON {
 		err = dbh.QueryRow(`
-			select jsonb_object_agg(k, v::int[])
+			select jsonb_object_agg(k, v)
 			from each($1::hstore) e(k, v);
 		`, evalstr).Scan(&evalstr)
 		if err != nil {

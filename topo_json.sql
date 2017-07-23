@@ -26,16 +26,16 @@ WHILE array_length(_S, 1) IS NOT NULL LOOP
 	_L := array_append(_L, _n);
 	_all_ms := ARRAY(
 		SELECT each.key
-		FROM jsonb_each(_edges) each
-		WHERE each.value @> jsonb_build_array(_n)
+		FROM jsonb_each_text(_edges) each
+		WHERE (each.value)::int[] @> ARRAY[_n]
 	);
 	FOREACH _m IN ARRAY _all_ms LOOP
-		_n_m_edges := ARRAY(SELECT jsonb_array_elements(_edges->_m));
+		_n_m_edges := (_edges->>_m)::int[];
 		IF _n_m_edges = ARRAY[_n] THEN
 			_S := array_append(_s, _m::int);
 			_edges := _edges - _m;
 		ELSE
-			_edges := jsonb_set(_edges, ARRAY[_m], to_jsonb(array_remove(_n_m_edges, _n)));
+			_edges := jsonb_set(_edges, ARRAY[_m], to_jsonb(array_remove(_n_m_edges, _n)::text));
 		END IF;
 	END LOOP;
 END LOOP;
